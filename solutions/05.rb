@@ -37,7 +37,7 @@ def self.init(&block)
 end
 
 def initialize(&block)
-	#@branch = BranchDecorator.new self
+	@branch = Branch.new self
     @pending_changes = Hash.new
     @history = Hash.new
     @current_branch = "master"
@@ -74,60 +74,42 @@ end
 
 def commit(message)
 	count =  @pending_changes.size
-	if message != "" || count != 0
-		date, hash_string = Time.now.rfc2822 , date.to_s + message
-		hash = Digest::SHA1.hexdigest(hash_string)
-		@pending_changes.select do |object|
-			@commit_messages = {:object =>
-			{:message => message, :hash => hash, :date => date}}
-		end
-			@commit_messages
-			self.message_count(message,count)
+	#date, hash_string = Time.now.rfc2822 , date.to_s + message
+	#hash = Digest::SHA1.hexdigest(hash_string)
+	set_head Commit.new(head.result, @pending_changes, message)
+	@history[head.result.hash] = head.result
+	@pending_changes = Hash.new
+	if count > 0
+        Response.new "#{message}\n\t#{count} objects changed", true, head.result
 	else
-		return "Nothing to commit, working directory clean."
+		Response.new "Nothing to commit, working directory clean.", false
 	end
 end
 
-      def head
-        if @current_branch.commit.empty?
-          Result.new("Branch #{@current_branch.name}" \
-            " does not have any commits yet.", false, true)
-        else
-          last_commit = @current_branch.commits.last
-          Result.new(last_commit.message, true, false, last_commit)
-        end
-      end
+def head
+	result = @branch.heads[@current_branch]
+	if result != nil
+	  Response.new result.message, true, result
+	else
+	  Response.new "Branch #{current_branch} does not have any commits yet.", false
+	end
+end
+
+def set_head(value)
+	@branch.heads[@current_branch] = value
+end
 
 def remove(name)
-	for_removing = self.get('name')
-	if for_removing == nil
-		return "Object #{name} is not committed."
+	for_removing = self.get(name)
+	if for_removing != nil
+		@pending_changes[name] = Change.new(:remove, name)
+		Response.new "Added #{name} for removal.", true, for_removing
 	else
-		for_removing.delete
-		return "Added #{name} for removal. '\n '" + for_removing
+		Response.new "Object #{name} is not committed.", true, for_removing
 	end
 end
 
-def success?
-
-end
-
-def error?
-
-end
-
-def self.head
-	last_object, final_result = @commit_messages.values.last , nil
-	if last_object == nil
-		return "Branch #{name} does not have any commits yet"
-	else
-		#message, hash, date = last_object.values_at(:message, :hash, :date)
-		final_result = result
-		return final_result.to_s
-	end
-end
-
-def self.result
+def result
 	last = @commit_messages.values.last
 	message, hash, date = last.values_at(:message, :hash, :date)
 	final_result = message + " " + hash + " " + date
@@ -135,26 +117,88 @@ def self.result
 end
 
 
-def self.get(name)
-	taken_object = ""
-	@objects.select do |object|
-	if object[name] == name
-		taken_object = @objects[name]
-	end
-end.first
+def get(name)
+	taken_object = head.result.get(name) unless head.error?
 
-	if taken_object == ""
-		return "Object #{name} is not commited."
+	if taken_object != nil
+		Response.new "Found object #{name}.", true, taken_object
 	else
-		return "Found object #{name}." + " \n " + taken_object
+		return "Object #{name} is not commited.", false
 	end
 end
 
-def self.log
+def log
+	if head.success?
+      Response.new head.result.log, true
+    else
+      Response.new "Nothing to commit, working directory clean.", false
+    end
+end
+
+end
+
+class Commit
+attr_reader :date, :message, :hash
+
+TIME_FORMAT = "%a %b %d %H:%M %Y %z"
+
+def initialize(parent_commit, changes, message)
+	@parent_commit, @changes, @message = parent_commit, changes, message
+	@date = Time.now
+	formatted_time = @date.getgm.strftime(Commit::TIME_FORMAT)
+	@hash = Digest::SHA1.hexdigest "#{formatted_time}#{message}"
+end
+
+def size
+	@changes.size
+end
+
+def to_s
+	formatted_time = @date.strftime(Commit::TIME_FORMAT)
+	"Commit #{hash}\nDate: #{formatted_time}\n\n\t#{message}"
 end
 
 end
 
 class Branch
-#TODO
+attr_reader :heads
+
+def initialize(repository)
+	@repository = repository
+	@heads = Hash.new
+	@heads["master"] = nil
+end
+
+def create(branch_name)
+	if @heads.has_key? branch_name
+		Response.new "Branch #{branch_name} already exists.", false
+	else
+		@heads[branch_name] = @repository.head
+		Response.new "Created branch #{branch_name}.", true
+	end
+end
+
+def remove(branch_name)
+	if @heads.has_key? branch_name
+		if branch_name != @repository.current_branch
+			@heads.delete branch_name
+			Response.new "Removed branch #{branch_name}.", true
+		else
+			Response.new "Cannot remove current branch.", false
+		end
+	else
+		Response.new "Branch #{branch_name} does not exists.", false
+	end
+end
+
+def list
+	@heads.map {|key, value|
+		if @repository.current_branch == key
+			"* " + key
+		else
+			"  " + key
+		end
+		}.join("\n")
+end
+
 end
