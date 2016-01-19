@@ -1,4 +1,4 @@
-require 'time'
+#require 'time'
 require 'digest/sha1'
 
 class Response
@@ -42,16 +42,7 @@ def initialize(&block)
     @history = Hash.new
     @current_branch = "master"
     self.instance_eval &block if block_given?
-	#@hash = Digest::SHA1.new
 end
-
-#COMMANDS = [ :add, :commit, :remove, :get, :message, :head, :log].freeze
-
-#COMMANDS.each do |command_name|
-#	define_method(command_name) do |arguments|
-#		@instructions << [command_name, *arguments]
-#	end
-#end
 
 def message(name)
 	thing = name
@@ -99,13 +90,21 @@ def set_head(value)
 	@branch.heads[@current_branch] = value
 end
 
-def remove(name)
-	for_removing = self.get(name)
-	if for_removing != nil
-		@pending_changes[name] = Change.new(:remove, name)
-		Response.new "Added #{name} for removal.", true, for_removing
+def checkout(commit_hash)
+	if @history.has_key? commit_hash
+		set_head @history[commit_hash]
+		Response.new "HEAD is now at #{commit_hash}.", true, head.result
 	else
-		Response.new "Object #{name} is not committed.", true, for_removing
+		Response.new "Commit #{commit_hash} does not exist.", false
+	end
+end
+
+def remove(name)
+	if get(name).success?
+		@pending_changes[name] = Change.new(:remove, name)
+		Response.new "Added #{name} for removal.", true, get(name)
+	else
+		Response.new "Object #{name} is not committed.", false
 	end
 end
 
@@ -153,9 +152,38 @@ def size
 	@changes.size
 end
 
+def get(name)
+	if @changes.has_key? name
+		change = @changes[name]
+		change.object unless change.action == :remove
+	else
+		@parent_commit.get(name)  unless @parent_commit == nil
+	end
+end
+
+def objects(excluding = Array.new)
+	total = Array.new
+	if @parent_commit != nil
+		total_exclude = excluding | @changes.map{ |key, value| key}
+		total = @parent_commit.objects(total_exclude)
+	end
+
+	total.concat(@changes.select {|key, value| 
+		value.action == :add unless excluding.incude? (value.name)
+		}.map {|key, value| value.object })
+end
+
 def to_s
 	formatted_time = @date.strftime(Commit::TIME_FORMAT)
 	"Commit #{hash}\nDate: #{formatted_time}\n\n\t#{message}"
+end
+
+def log
+	if @parent_commit != nil
+		to_s + "\n\n" + @parent_commit.log
+	else
+		to_s
+	end
 end
 
 end
@@ -175,6 +203,15 @@ def create(branch_name)
 	else
 		@heads[branch_name] = @repository.head
 		Response.new "Created branch #{branch_name}.", true
+	end
+end
+
+def checkout(branch_name)
+	if @heads.has_key? branch_name
+		@repository.current_branch = branch_name
+		Response.new "Switched to branch #{branch_name}.", true
+	else
+		Response.new "Branch #{branch_name} does not exist.", false
 	end
 end
 
