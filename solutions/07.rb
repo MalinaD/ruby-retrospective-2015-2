@@ -17,7 +17,8 @@ def self.to_date(days)
   calculated_year = sprintf('%04d', ((days - calculated_day) / 360 + 1))
   calculated_month = "12" if calculated_month == "00"
 
-  Date.new("#{calculated_year}-#{calculated_month}-#{sprintf('%02d', calculated_day)}")
+  Date.new("#{calculated_year}-#{calculated_month}-#{
+    sprintf('%02d', calculated_day)}")
 end
 
 def initialize(date_string)
@@ -26,8 +27,12 @@ def initialize(date_string)
   @date_string = date_string[0..9]
 end
 
+def to_s
+   @date_string
+end
+
 def ===(date)
-  difference = data.to_days - self.to_days
+  difference = date.to_days - self.to_days
   return false if difference < 0
   period ? difference % period == 0 : difference == 0
 end
@@ -48,22 +53,75 @@ def within_week(date)
                                  .map{ |days| Date.to_date(days) }
                                  .delete_if { |date| !(self === date) }
       occurence
+end
+
+end
+
+class File
+attr_accessor :name, :notes
+
+    def initialize(name)
+      @name = name
+      @notes = Array.new
     end
 
-def to_s
-   "%04d-%02d-%02d" % [@year, @month, @day]
-end
+    def note(header, *tags, &block)
+      new_note = Note.new(self, header)
+     new_note.tags = tags
+     new_note.instance_eval(&block)
+     @notes.push(new_note)
+
+     new_note
+    end
+
+    def scheduled(some_date)
+      current_date = LazyMode::Date.new(some_date)
+      scheduled_date = current_date
+
+      case occurence
+      when 'm' then end_date = current_date.month + 1
+      when 'd' then end_date = current_date.day + 1
+      when 'w' then end_date = current_date.day + 7
+       end
+    end
+
+    def daily_agenda(date)
+      agenda = File.new("daily_agenda_'#{date.to_s}'")
+      agenda.notes = notes.map { |note| note.dup }
+      agenda.notes.delete_if { |note| !(note.date === date) }
+      agenda.notes.each { |note| note.date = date }
+
+      agenda
+    end
+
+    def weekly_agenda(date)
+      agenda = File.new("weekly_agenda_'#{date.to_s}'")
+      agenda.notes = notes.map { |note| note.weekly_occurrence(date) }
+      agenda.notes.flatten!
+
+      agenda
+    end
+
+    def filter_notes(tag: nil, text: nil, status: nil)
+      filter = notes.reject { |note| !note.tags.include?(tag) and tag  }
+      filter.delete_if { |note| note.status != status and status }
+      filter.delete_if do |note|
+        (note.body =~ text) == nil and (note.header =~ text) == nil and text
+      end
+
+      filter
+    end
+
+    def where(tag: nil, text: nil, status: nil)
+      filter = File.new("filter")
+      filter.notes = filter_notes(tag: tag, text: text, status: status)
+
+      filter
+    end
 
 end
 
-class Note #< Struct.new(:header, :body, :status, :tags)
-	#def new_note(header, body, status, tags)
-   #   Note.new(header.strip.downcase.to_sym,
-    #           body.strip,
-    #           status.strip.downcase.to_sym,
-     #          tags.split(',').map(&:strip))
-  #end
-
+class Note
 attr_accessor :tags, :file, :header, :date
 
   def initialize(file, header)
@@ -83,6 +141,12 @@ attr_accessor :tags, :file, :header, :date
     @file.name
   end
 
+  def status(new_status = nil)
+  @status = new_status if new_status
+
+  @status
+  end
+
   def note(header, *tags, &block)
     new_note = Note.new(@file, header)
     new_note.tags = tags
@@ -91,63 +155,23 @@ attr_accessor :tags, :file, :header, :date
     new_note
   end
 
+  def weekly_occurrence(date)
+    occurrence = self.date.within_week(date)
+    note_array = occurrence.map { |date| self.schedule_on(date) }
+
+    note_array
+  end
+
+  def schedule_on(date)
+    new_note = self.dup
+    new_note.date = date
+
+    new_note
+  end
+
   def scheduled(date)
       @date = Date.new(date)
   end
-
-  def status(new_status = nil)
-  @status = new_status if new_status
-
-  @status
-  end
-
-end
-
-class File
-attr_accessor :name, :notes
-
-    def initialize(name)
-      @notes = []
-      @name = name
-    end
-
-    def each(&block)
-      @notes.each &block
-    end
-
-    def create_file(name = File.new.name)
-       @notes[name] = notes
-    end
-
-   # def name
-   #   file_name = "#{@name}"
-   # end
-
-    def note(header, *tags, &block)
-      new_note = Note.new(@file, header)
-     new_note.tags = tags
-     new_note.instance_eval(&block)
-     @notes.push(new_note)
-
-     new_note
-    end
-
-    def scheduled(some_date)
-      current_date = LazyMode::Date.new(some_date)
-      scheduled_date = current_date
-
-      case occurence
-      when 'm' then end_date = current_date.month + 1
-      when 'd' then end_date = current_date.day + 1
-      when 'w' then end_date = current_date.day + 7
-       end
-    end
-
-    def serialize
-      file = "#{@notes.size}:#{serialize_entities(@name)}"
-
-      "#{file}"
-    end
 
 end
 
