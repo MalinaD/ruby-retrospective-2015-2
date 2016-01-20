@@ -100,9 +100,10 @@ def checkout(commit_hash)
 end
 
 def remove(name)
-	if get(name).success?
+	search = get(name)
+	if search.success?
 		@pending_changes[name] = Change.new(:remove, name)
-		Response.new "Added #{name} for removal.", true, get(name)
+		Response.new "Added #{name} for removal.", true, search
 	else
 		Response.new "Object #{name} is not committed.", false
 	end
@@ -168,8 +169,8 @@ def objects(excluding = Array.new)
 		total = @parent_commit.objects(total_exclude)
 	end
 
-	total.concat(@changes.select {|key, value| 
-		value.action == :add unless excluding.incude? (value.name)
+	total.concat(@changes.select {|key, value|
+		value.action == :add unless excluding.incude?(value.name)
 		}.map {|key, value| value.object })
 end
 
