@@ -43,7 +43,7 @@
   no_trailing_whitespace: true
   check_syntax: true
   no_global_variables: true
-  english_words_for_names: ''
+
   naming_conventions: true
   max_method_arity: 3
   spaces_around_operators: true
