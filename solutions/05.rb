@@ -1,4 +1,3 @@
-#require 'time'
 require 'digest/sha1'
 
 class Response
@@ -23,6 +22,12 @@ class Change
 
   def initialize(action, name, object = nil)
     @action, @name, @object = action, name, object
+  end
+end
+
+class TrueResult < Response
+  def initialize(message, result = nil)
+    super(message, true, result)
   end
 end
 
@@ -65,8 +70,6 @@ end
 
 def commit(message)
 	count =  @pending_changes.size
-	#date, hash_string = Time.now.rfc2822 , date.to_s + message
-	#hash = Digest::SHA1.hexdigest(hash_string)
 	set_head Commit.new(head.result, @pending_changes, message)
 	@history[head.result.hash] = head.result
 	@pending_changes = Hash.new
@@ -101,11 +104,11 @@ end
 
 def remove(name)
 	search = get(name)
-	if search.success?
+	if search.error?
+		Response.new "Object #{name} is not committed.", false
+	else
 		@pending_changes[name] = Change.new(:remove, name)
 		Response.new "Added #{name} for removal.", true, search
-	else
-		Response.new "Object #{name} is not committed.", false
 	end
 end
 
@@ -123,7 +126,7 @@ def get(name)
 	if taken_object != nil
 		Response.new "Found object #{name}.", true, taken_object
 	else
-		return "Object #{name} is not commited.", false
+		Response.new "Object #{name} is not commited.", false
 	end
 end
 
@@ -165,13 +168,13 @@ end
 def objects(excluding = Array.new)
 	total = Array.new
 	if @parent_commit != nil
-		total_exclude = excluding | @changes.map{ |key, value| key}
+		total_exclude = excluding || @changes.map{ |key, value| key}
 		total = @parent_commit.objects(total_exclude)
 	end
 
 	total.concat(@changes.select {|key, value|
-		value.action == :add unless excluding.incude?(value.name)
-		}.map {|key, value| value.object })
+		value.action == :add unless excluding.incude?(value.name)}
+		.map {|key, value| value.object })
 end
 
 def to_s
@@ -229,14 +232,27 @@ def remove(branch_name)
 	end
 end
 
-def list
-	@heads.map {|key, value|
-		if @repository.current_branch == key
-			"* " + key
-		else
-			"  " + key
-		end
-		}.join("\n")
+def list()
+	branches_list = ""
+    @repository.branch.sort! { |a, b| a.name <=> b.name }
+    @repository.branch.each do |branch|
+      prefix = (branch.name == @repository.current_branch.name ? '* ' : '  ' )
+      branches_list += prefix + branch.name + "\n"
+    end
+
+    branches_list.chomp!
+    TrueResult.new(branches_list)
+end
+
+
+def log
+	if @heads.has_key? branch_name
+	  message = @repository.current_branch.reverse.map(&:to_s).join("\n\n")
+	  Response.new(true, message)
+	else
+	  branch_name = branch.active_branch.name
+	  Response.new(false, "Branch #{branch_name} does not have any commits yet.")
+	end
 end
 
 end
