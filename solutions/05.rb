@@ -234,11 +234,14 @@ end
 
 def list()
 	branches_list = ""
-    @repository.branch.sort! { |a, b| a.name <=> b.name }
-    @repository.branch.each do |branch|
-      prefix = (branch.name == @repository.current_branch.name ? '* ' : '  ' )
-      branches_list += prefix + branch.name + "\n"
-    end
+	branches_list = @repository.sort.map do |_, branch|
+        "#{heads.has_key? branch ? '*' : ' '} #{branch.name}"
+      end.join("\n")
+    #@heads.sort! { |a, b| a.name <=> b.name }
+    #@heads.each do |branch|
+    #  prefix = (branch.name == @repository.current_branch.name ? '* ' : '  ' )
+    #  branches_list += prefix + branch.name + "\n"
+    #end
 
     branches_list.chomp!
     TrueResult.new(branches_list)
