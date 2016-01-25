@@ -1,112 +1,167 @@
 module TurtleGraphics
-#I did not have much time, but i will be glad of at least a small comment
 class Turtle
-  attr_accessor :position, :rows, :cols, :marks
-  attr_reader :left, :right, :commands
+  DIRECTIONS = [:up, :right, :down, :left]
 
-  def initialize(rows, cols)
+  def initialize(rows = 0, columns = 0)
+    @matrix = create_matrix(rows, columns)
   	@rows = rows
-  	@cols = cols
-    @position, @marks = Array.new(@rows) { Array.new(@cols, 0) }, []
-    @commands
+  	@columns = columns
+    @column = 0
+    @row = 0
+    @direction = :right
+    @spawned = false
   end
 
-  def move
-    @position += 1
+def move
+  spawn_at(0, 0) unless @spawned
+  case @direction
+    when :up    then @row -= 1
+    when :down  then @row += 1
+    when :right then @column += 1
+    when :left  then @column -= 1
+  end
+  @row %= @rows
+  @column %= @columns
+  step_at(@row, @column)
+end
+
+def draw(canvas = Canvas::Default.new, &block)
+ instance_eval(&block)
+ canvas.process(@matrix)
+end
+
+ def turn_left
+    change_direction(:left)
   end
 
-  def mark
-    marks << @position
+  def turn_right
+    change_direction(:right)
   end
 
-COMMAND = [:move, :mark, :turn_right, :turn_left].freeze
+  def look(direction)
+    @direction = direction
+  end
 
-    COMMAND.each do |command_name|
-      define_method command_name do | *arguments |
-        @instructions << [command_name, *arguments]
+ def spawn_at(row, column)
+    @spawned = true
+
+    @row = row
+    @column = column
+
+    step_at(@row, @column)
+  end
+
+ private
+
+def create_matrix(rows, columns)
+  Array.new(rows) { Array.new(columns, 0) }
+end
+
+def step_at(row, column)
+  @matrix[row][column] += 1
+end
+
+def change_direction(direction)
+  current_direction_index = DIRECTIONS.index(@direction)
+
+  if direction == :right
+    current_direction_index += 1
+  else
+    current_direction_index -= 1
+  end
+
+  current_direction_index %= DIRECTIONS.length
+
+  @direction = DIRECTIONS[current_direction_index]
+end
+
+end
+
+module Canvas
+
+  class Base
+      def process(matrix)
+        matrix
+      end
+
+    def find_max_element
+      @matrix.reduce(@matrix.first.max) do |current_max, row|
+        row_max = row.max
+        row_max > current_max ? row_max : current_max
       end
     end
+    
+    def intensity_matrix
+      max_element = find_max_element
 
-def self.draw
- turtle = Turtle.new position
- turtle.instance_eval &commands
- turtle.commands
- case commands
-    when 'move' then puts '1'
-    when 'mark' then puts '4'
-	when 'turn_right' then puts '2'
-	when 'turn_left' then puts '3'
- end
-end
+      @matrix.map { |row| row.map { |cell| cell.to_f / max_element } }
+    end
+  end
+ 
 
-end
-
-class Canvas
- attr_reader :canvas
-
-      def initialize(canvas)
-        @canvas = canvas
-      end
-
-class HTML
- attr_reader :pixels
+class HTML < Base
 
   def initialize(pixels)
   	@pixels = pixels
   end
 
-  def set_values(width, height)
-      @pixels[[width, height]] = true
+  def process(matrix)
+    html_beginning + table(matrix) + closing_tags
   end
 
-TEMPLATE = '<!DOCTYPE html>
-<html>
-<head>
-  <title>Turtle graphics</title>
+  private
 
-  <style>
-    table {
-      border-spacing: 0;
-    }
+def html_beginning
+  "<!DOCTYPE html>
+  <html>
+  <head>
+    <title>Turtle graphics</title>
 
-    tr {
-      padding: 0;
-    }
+    <style>
+      table {
+        border-spacing: 0;
+      }
 
-    td {
-      width: 5px;
-      height: 5px;
+      tr {
+        padding: 0;
+      }
 
-      background-color: black;
-      padding: 0;
-    }
-  </style>
-</head>
-<body>
-  <table>
-    <tr>
-      <td style="opacity: 1.00"></td>
-      <td style="opacity: 1.00"></td>
-      <td style="opacity: 0.00"></td>
-    </tr>
-    <tr>
-      <td style="opacity: 0.00"></td>
-      <td style="opacity: 1.00"></td>
-      <td style="opacity: 1.00"></td>
-    </tr>
-    <tr>
-      <td style="opacity: 0.00"></td>
-      <td style="opacity: 0.00"></td>
-      <td style="opacity: 0.00"></td>
-    </tr>
-  </table>
-</body>
-</html>'.freeze
+      td {
+        width: #{@pixels}px;
+        height: #{@pixels}px;
 
-def render
-	TEMPLATE % super
+        background-color: black;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>"
+end
+
+def pixel(opacity)
+  "<td style=\"opacity: #{opacity}\"></td>"
+end
+
+def pixels_row(matrix_row)
+  "<tr>" +
+    matrix_row.map { |intensity| pixel(format('%.2f', intensity)) }.join("\n") +
+    "</tr>"
+end
+
+def table(matrix)
+  "<table>" +
+    matrix.intensity_matrix.map { |row| pixels_row(row) }.join("\n") +
+    "</table>"
+end
+
+def closing_tags
+  "</body></html>"
 end
 
 end
+
+    class Default < Base
+    end
+
 end
 end
