@@ -1,37 +1,11 @@
 class Spreadsheet
 
-attr_accessor :rows, :cells, :table_elements
-
 def initialize(table_elements = '')
   @name = 'Spreadsheet'
   @cells = table_elements.strip.split(/\n/).map do |row|
     row.strip.split(/\t|\s{2,}/).map(&:strip)
   end
   @rows = @cells.size
-  @table_elements = parse_elements table_elements
-end
-
-def new
-  p ""
-end
-
-def new(table_elements)
-  @table_elements << table_elements.lines.map(&:chomp)
-  @table_elements.each do |maxes, rows|
-    rows.split(/(\t)/).strip do |value, column|
-      maxes[column] = [(maxes[column] || 0), value.to_s.length].max
-      #if value[0] == "="
-      #  formula_name = value.partition('=').first
-      #  first_element = value.match("\((\d+)\)")[1]
-      #  second_element = value.match("\(\d+))\)")[1]
-      #  case formula_name
-      #    when "ADD" then add(first_element)
-          # when "MULTIPLY"  multiply()
-      #  end
-     # end
-    end
-    maxes
-  end
 end
 
 def to_s
@@ -39,11 +13,7 @@ def to_s
 end
 
 def empty?
-if @table_elements == ""
-  return true
-else 
-  return false
-end
+  @cells.empty?
 end
 
 def cell_at(cell_index)
@@ -55,14 +25,6 @@ end
 def [](cell_index)
   (0...@rows).map{ |row| row_to_s(row) }.join("\n")
 end
-
-def parse_elements(elements)
-  rows = elements.split("\n").select { |item| ! (item =~ /^\s*$/) }.map(&:strip)
-  rows.map { |row| row.split(/\t|(?:\ {2,})/) }
-end
-
-  class Error < StandardError
-  end
 
 private
 
@@ -78,6 +40,11 @@ private
     end
 
     values.join("\t")
+  end
+end
+
+class Spreadsheet
+  class Error < Exception
   end
 end
 
@@ -114,11 +81,10 @@ class Spreadsheet
       column, row = index.match(PATTERN).captures
       row = row.to_i.pred
       column = column.split(//).reverse.each_with_index
-      .map{|c, i| (c.ord - 'A'.ord + 1) * LETTERS ** i }
+      .map { |c, i| (c.ord - 'A'.ord + 1) * LETTERS ** i }
       .reduce(&:+).pred
       [row, column]
     end
-
   end
 end
 
@@ -128,31 +94,44 @@ module Formulas
 
   module_function
 
-    def add(argument_one, argument_two, *optional)
-      if optional == nil
-        argument_one + argument_two
-      else
-      argument_one + argument_two +
-        (optional.inject(0) { |sum, number| sum + number })
+    def add(arguments)
+      light_assert('ADD', 2, arguments)
+      arguments.reduce(&:+)
+    end
+
+    def multiply(arguments)
+      light_assert('MULTIPLY', 2, arguments)
+      arguments.reduce(&:*)
+    end
+
+    def subtract(arguments)
+      strong_assert('SUBTRACT', 2, arguments)
+      arguments[0] - arguments[1]
+    end
+
+    def divide(arguments)
+      strong_assert('DIVIDE', 2, arguments)
+      arguments[0] / arguments[1]
+    end
+
+    def mod(arguments)
+      strong_assert('MOD', 2, arguments)
+      arguments[0] % arguments[1]
+    end
+
+   def light_assert(name, expected, actual)
+      if parameters.size < expected
+      raise Spreadsheet::Error, "Wrong number of arguments for '#{formula}': "\
+                   "expected at least #{expected}, got #{parameters.size}"
       end
     end
 
-    def multiply(argument_one, argument_two, *optional)
-      if optional == nil
-        argument_one * argument_two
-      else
-        argument_one * argument_two *
-        (optional.inject(0) { |value, number| value * number })
+    def strong_assert(formula, expected, parameters)
+      if parameters.size != expected
+      raise Spreadsheet::Error, "Wrong number of arguments for '#{formula}': "\
+                   "expected #{expected}, got #{parameters.size}"
       end
     end
-
-    def subtract(argument_one, argument_two)
-      argument_one - argument_two
-    end
-
-   # def divide(argument_one, argument_two)
-   #   argument_one / argument_two
-   # end
 end
 end
 
@@ -162,8 +141,26 @@ class Spreadsheet
 
     def Formula.formula?(string)
       string =~ PATTERN
-    end  
+    end
 
+    def initialize(string)
+      if string !~ PATTERN
+        raise Error, "Invalid expression '#{string}'"
+      end
+
+      @name, args = string.match(PATTERN).captures
+      @args = args.split(/\s*,\s*/)
+    end
+
+    def value(sheet)
+      case @name
+      when 'ADD', 'MULTIPLY', 'SUBTRACT', 'DIVIDE', 'MOD'
+        formula = @name.downcase.to_sym
+        Formulas.send(formula, @args, sheet)
+      else
+        raise Error, "Unknown function '#{@name}'"
+      end
+    end
   end
 end
 
@@ -176,22 +173,26 @@ def expression?(string)
 end
 
 def evaluate_string(cell, sheet)
-  unless  expression?(cell)
+  unless expression?(cell)
     return cell
   end
+
   evaluate_expression(cell[1 .. -1], sheet)
 end
-    
+
 def evaluate_expression(cell, sheet)
   evaluate_safely(cell, sheet) or
-  raise Error, "Invalid expression '#{cell}'"
+    raise Error, "Invalid expression '#{cell}'"
 end
 
 def evaluate_safely(cell, sheet)
-  case 
-  when Cell.cell?(cell) then sheet[cell]
-  when number?(cell) then format(cell.to_f)
-  #when Formula.formula?(cell) then format(Formula.new(cell).value(sheet))
+  case
+  when Cell.cell?(cell)
+    sheet[cell]
+  when Formula.formula?(cell)
+    format(Formula.new(cell).value(sheet))
+  when number?(cell)
+    format(cell.to_f)
   end
 end
 
@@ -199,8 +200,8 @@ def number?(cell)
   return cell =~ /\A[+-]?[0-9]+(\.[0-9]+)?\z/
 end
 
-def format(value)
-  (value % 1 == 0) ? (value.to_i.to_s) : ("%2f" % value)
+def format(x)
+  (x % 1 == 0) ? (x.to_i.to_s) : ("%.2f" % x)
 end
 
 end
