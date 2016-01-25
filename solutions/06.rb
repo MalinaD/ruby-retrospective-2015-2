@@ -3,7 +3,7 @@ class Turtle
   DIRECTIONS = [:up, :right, :down, :left]
 
   def initialize(rows = 0, columns = 0)
-    @matrix = create_matrix(rows, columns)
+    @matrix = Array.new(rows) { Array.new(columns, 0) }
   	@rows = rows
   	@columns = columns
     @column = 0
@@ -20,9 +20,8 @@ def move
     when :right then @column += 1
     when :left  then @column -= 1
   end
-  @row %= @rows
-  @column %= @columns
-  step_at(@row, @column)
+  @row, @column = (@row % @rows), (@column % @columns)
+  @matrix[@row][@column] += 1
 end
 
 def draw(canvas = Canvas::Default.new, &block)
@@ -48,18 +47,10 @@ end
     @row = row
     @column = column
 
-    step_at(@row, @column)
+    @matrix[@row][@column] += 1
   end
 
  private
-
-def create_matrix(rows, columns)
-  Array.new(rows) { Array.new(columns, 0) }
-end
-
-def step_at(row, column)
-  @matrix[row][column] += 1
-end
 
 def change_direction(direction)
   current_direction_index = DIRECTIONS.index(@direction)
@@ -71,7 +62,6 @@ def change_direction(direction)
   end
 
   current_direction_index %= DIRECTIONS.length
-
   @direction = DIRECTIONS[current_direction_index]
 end
 
@@ -79,25 +69,59 @@ end
 
 module Canvas
 
-  class Base
-      def process(matrix)
-        matrix
+class Base
+    def process(matrix)
+      matrix
+    end
+
+    private
+
+    def to_proportions(matrix)
+      max_item = matrix.flatten.max
+
+      matrix_proportions = matrix.map do |row|
+        row.map { |element| element / max_item.to_f }
       end
 
-    def find_max_element
-      @matrix.reduce(@matrix.first.max) do |current_max, row|
-        row_max = row.max
-        row_max > current_max ? row_max : current_max
-      end
+      matrix_proportions
     end
-    
-    def intensity_matrix
-      max_element = find_max_element
+end
 
-      @matrix.map { |row| row.map { |cell| cell.to_f / max_element } }
-    end
+class ASCII < Base
+
+def initialize(symbols)
+  @symbols = symbols
+end
+
+def process(matrix)
+  proportions = to_proportions(matrix)
+  to_ascii(proportions)
+end
+
+private
+
+def to_ascii(matrix)
+  symbols_matrix = matrix.map do |row|
+      row_symbols = row.map { |element| ascii_element element }
+          row_symbols.join
   end
- 
+
+  symbols_matrix.join("\n")
+end
+
+def ascii_element(percent)
+  steps = @symbols.length
+
+  interval = 1.0 / (steps - 1)
+
+  percent = percent.round(2)
+
+  steps.times do |step|
+    return @symbols[step] if percent <= (interval * step).round(2)
+  end
+end
+
+end
 
 class HTML < Base
 
@@ -106,12 +130,13 @@ class HTML < Base
   end
 
   def process(matrix)
-    html_beginning + table(matrix) + closing_tags
+    proportions = to_proportions(matrix)
+    add_html(proportions)
   end
 
   private
 
-def html_beginning
+def add_html(matrix)
   "<!DOCTYPE html>
   <html>
   <head>
@@ -135,7 +160,7 @@ def html_beginning
       }
     </style>
   </head>
-  <body>"
+  <body><table>#{table(matrix)}</table>" + closing_tags
 end
 
 def pixel(opacity)
@@ -149,9 +174,10 @@ def pixels_row(matrix_row)
 end
 
 def table(matrix)
-  "<table>" +
-    matrix.intensity_matrix.map { |row| pixels_row(row) }.join("\n") +
-    "</table>"
+    proportions_html = matrix.map do |proportion|
+          pixels_row(proportion)
+        end
+    proportions_html.join
 end
 
 def closing_tags
