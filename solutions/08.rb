@@ -41,7 +41,8 @@ end
 def empty?
 if @table_elements == ""
   return true
-else return false
+else 
+  return false
 end
 end
 
@@ -108,7 +109,7 @@ class Spreadsheet
         raise Error, "Invalid cell index '#{index}'"
       end
     end
-        
+
     def to_numbers(index)
       column, row = index.match(PATTERN).captures
       row = row.to_i.pred
@@ -156,7 +157,17 @@ end
 end
 
 class Spreadsheet
+  class Formula
+    PATTERN = /\A([A-Z]+)\(([^\)]*)\)\z/
 
+    def Formula.formula?(string)
+      string =~ PATTERN
+    end  
+
+  end
+end
+
+class Spreadsheet
 module Expressions
 module_function
 
@@ -193,5 +204,4 @@ def format(value)
 end
 
 end
-
 end
