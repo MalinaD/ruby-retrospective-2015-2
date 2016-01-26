@@ -119,7 +119,7 @@ module Formulas
       arguments[0] % arguments[1]
     end
 
-   def light_assert(name, expected, actual)
+   def light_assert(formula, expected, parameters)
       if parameters.size < expected
       raise Spreadsheet::Error, "Wrong number of arguments for '#{formula}': "\
                    "expected at least #{expected}, got #{parameters.size}"
@@ -137,30 +137,43 @@ end
 
 class Spreadsheet
   class Formula
-    PATTERN = /\A([A-Z]+)\(([^\)]*)\)\z/
+     NUMBER_PATTERN = /\A(\d|\.)+\z/
+     FORMULA_PATTERN = %r{\A[A-Z]+\((?<param>([A-Z]+\d+|\d+\.?\d*))?(\s*,\s*\g<param>?)*\)\z}x
+     #PATTERN = /\A([A-Z]+)\(([^\)]*)\)\z/
+     VALID_FORMULA = ["ADD", "MULTIPLY", "SUBTRACT", "DIVIDE", "MOD"]
 
     def Formula.formula?(string)
-      string =~ PATTERN
+      string =~ FORMULA_PATTERN
     end
 
-    def initialize(string)
-      if string !~ PATTERN
-        raise Error, "Invalid expression '#{string}'"
-      end
-
-      @name, args = string.match(PATTERN).captures
-      @args = args.split(/\s*,\s*/)
+    def value(expression)
+      parameters_string = /\([A-Z\d,\s.]*\)/.match(expression)[0][1..(-2)]
+      parameters = parameters_string.split(",").map(&:strip)
+      formula = /[A-Z]+/.match(expression)[0]
+      evaluate_formula(formula, evaluate_parameters(parameters))
     end
 
-    def value(sheet)
-      case @name
-      when 'ADD', 'MULTIPLY', 'SUBTRACT', 'DIVIDE', 'MOD'
-        formula = @name.downcase.to_sym
-        Formulas.send(formula, @args, sheet)
-      else
-        raise Error, "Unknown function '#{@name}'"
+    def evaluate_parameters(parameters)
+      parameters.map do |parameter|
+        if /\A\d/ === parameter
+          Float(parameter)
+        else 
+          evaluate_cell(parameter)
+        end
       end
     end
+
+    def evaluate_formula(formula, parameters)
+      validate_formula(formula)
+      send(formula, downcase.to_sym, parameters)
+    end
+
+    def validate_formula(formula)
+      unless VALID_FORMULA.include?(formula)
+        raise Spreadsheet::Error, "Unknown function '#{formula}'"
+      end
+    end
+
   end
 end
 
