@@ -49,10 +49,10 @@ def to_days
 end
 
 def within_week(date)
-      occurence = [0,1,2,3,4,5,6].map { |day| date.to_days + day }
-                                 .map{ |days| Date.to_date(days) }
-                                 .delete_if { |date| !(self === date) }
-      occurence
+    occurence = [0,1,2,3,4,5,6].map { |day| date.to_days + day }
+                               .map{ |days| Date.to_date(days) }
+                               .delete_if { |date| !(self === date) }
+    occurence
 end
 
 end
@@ -66,12 +66,12 @@ attr_accessor :name, :notes
     end
 
     def note(header, *tags, &block)
-      new_note = Note.new(self, header)
-     new_note.tags = tags
-     new_note.instance_eval(&block)
-     @notes.push(new_note)
+       new_note = Note.new(self, header)
+       new_note.tags = tags
+       new_note.instance_eval(&block)
+       @notes.push(new_note)
 
-     new_note
+       new_note
     end
 
     def scheduled(some_date)
@@ -79,10 +79,10 @@ attr_accessor :name, :notes
       scheduled_date = current_date
 
       case occurence
-      when 'm' then end_date = current_date.month + 1
-      when 'd' then end_date = current_date.day + 1
-      when 'w' then end_date = current_date.day + 7
-       end
+        when 'm' then end_date = current_date.month + 1
+        when 'd' then end_date = current_date.day + 1
+        when 'w' then end_date = current_date.day + 7
+      end
     end
 
     def daily_agenda(date)

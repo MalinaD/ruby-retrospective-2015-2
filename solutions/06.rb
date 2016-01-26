@@ -38,15 +38,14 @@ end
   end
 
   def look(direction)
+    raise 'Invalid orientations' unless DIRECTIONS.include? direction
     @direction = direction
   end
 
  def spawn_at(row, column)
     @spawned = true
-
     @row = row
     @column = column
-
     @matrix[@row][@column] += 1
   end
 
@@ -111,9 +110,7 @@ end
 
 def ascii_element(percent)
   steps = @symbols.length
-
   interval = 1.0 / (steps - 1)
-
   percent = percent.round(2)
 
   steps.times do |step|
@@ -186,8 +183,8 @@ end
 
 end
 
-    class Default < Base
-    end
+class Default < Base
+end
 
 end
 end
