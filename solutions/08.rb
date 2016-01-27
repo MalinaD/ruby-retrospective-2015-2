@@ -138,7 +138,8 @@ end
 class Spreadsheet
   class Formula
      NUMBER_PATTERN = /\A(\d|\.)+\z/
-     FORMULA_PATTERN = %r{\A[A-Z]+\((?<param>([A-Z]+\d+|\d+\.?\d*))?(\s*,\s*\g<param>?)*\)\z}x
+     FORMULA_PATTERN = %r{\A[A-Z]+\((?<param>([A-Z]+\d+|\d+\.?\d*))?
+      (\s*,\s*\g<param>?)*\)\z}x
      #PATTERN = /\A([A-Z]+)\(([^\)]*)\)\z/
      VALID_FORMULA = ["ADD", "MULTIPLY", "SUBTRACT", "DIVIDE", "MOD"]
 
@@ -157,7 +158,7 @@ class Spreadsheet
       parameters.map do |parameter|
         if /\A\d/ === parameter
           Float(parameter)
-        else 
+        else
           evaluate_cell(parameter)
         end
       end
